@@ -1,16 +1,19 @@
-module Mating
+
 include("PopulationStructs.jl")
 include("PatchesConstants.jl")
-using ..PopulationStructs: Individual, Patch, Gamete 
+using .PopulationStructs
 using StatsBase: sample
 using .const
-export random_mating
+
+#Individual: id: Int, genome: BitArray, sex: String
+#Gamete: id: Int, genome: BitVector, sex: String
+#patch: individuals: Vector{Individual}, Sex: String, patch_number: Int
+
 
 #randomly permuate the input patch
 #this needs to bootstrap the popualtion up to a constant size
 function random_parent(population::Patch)::Patch
-    indecies = sample(1:length(population.individuals), individuals_per_patch)
-    return Patch(population.individuals[indecies],
+    return Patch(permute!(population.individuals,1:males_per_patch),
                  population.sex,
                  population.patch_number)
 end
@@ -19,7 +22,7 @@ end
 #output - a random selection of half the allels in a gamete
 function mieosis(individual::Individual)::Gamete
     #introduce sex-specific behavior
-    random_allele=rand(0:1,number_of_loci)
+    random_allele = rand(0:1,number_of_loci)
     genome = individual.genome[number_of_loci*random_allele+Vector(1:number_of_loci)]
     gamete = Gamete(individual.id,individual.sex,genome)
     return gamete
@@ -31,16 +34,14 @@ function gamete_production(individual)
     return [mieosis(individual) for _=1:100]
 end
 
-#input - A vector of gametes and an individual
-#output - A vector of gametes including the gametes of the individual
-function vcat_gamete_production(gametes, individual)
-    return vcat(gametes, gamete_production(individual))
-end
-
 #input - A vector of individuals, length N
 #output - A vector of gametes, length 100N
 function broadcast_gamete_production(population)
-    return reduce(vcat_gamete_production,population; init = [])
+    gametes = Vector{Gamete}(undef, length(population) * 100)
+    for i in eachindex(population)
+        gametes[100*(i-1)+1:100*i] = gamete_production(population[i])
+    end
+    return gametes
 end
 
 #input - one male and one female gamete
@@ -69,6 +70,17 @@ function random_mating(males::Patch,females::Patch)::Tuple{Patch,Patch}
                             females.patch_number)
     return male_offspring,female_offspring
 end
-end
+
+male_population = [Patch([Individual(j + (i-1)*males_per_patch,"male",rand([0,1],(number_of_loci,2)))
+                          for j=1:males_per_patch],"male",i) 
+                   for i=1:number_of_patches]
+female_population = [Patch([Individual(j + (i-1)*males_per_patch,"female",rand([0,1],(number_of_loci,2)))
+                            for j=1:females_per_patch],"female",i)
+                    for i=1:number_of_patches]
+population = (male_population,female_population)
+
+using BenchmarkTools
+
+@benchmark random_mating(male_population[1], female_population[1])
 
 

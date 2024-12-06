@@ -40,7 +40,11 @@ end
 #input - A vector of individuals, length N
 #output - A vector of gametes, length 100N
 function broadcast_gamete_production(population)
-    return reduce(vcat_gamete_production,population; init = [])
+    gametes = Vector{Gamete}(undef, length(population) * 100)
+    for i in eachindex(population)
+        gametes[100*(i-1)+1:100*i] = gamete_production(population[i])
+    end
+    return gametes
 end
 
 #input - one male and one female gamete
